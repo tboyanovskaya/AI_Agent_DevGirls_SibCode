@@ -35,6 +35,8 @@ WRITE_TOOLS = {
     "to_moderation", "approve", "decline", "activate", "stop",
 }
 
+MAX_STEPS = 12  # жёсткий предохранитель от зацикливания
+
 
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
@@ -42,28 +44,60 @@ class AgentState(TypedDict):
     pending_tool_calls: list
     last_errors: list
     last_warnings: list
+    debug_log: list
+    step_count: int
+
+
+def _ensure_system(messages: list) -> list:
+    """Гарантирует, что SystemMessage ровно один и стоит первым."""
+    sys_msgs = [m for m in messages if isinstance(m, SystemMessage)]
+    rest = [m for m in messages if not isinstance(m, SystemMessage)]
+    if sys_msgs:
+        return [sys_msgs[-1]] + rest
+    return [SystemMessage(content=SYSTEM_PROMPT)] + rest
 
 
 def agent_node(state: AgentState) -> dict:
-    messages = list(state["messages"])
-    if not messages or not isinstance(messages[0], SystemMessage):
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
+    step_count = int(state.get("step_count") or 0) + 1
+
+    messages = _ensure_system(list(state["messages"]))
+
+    # Draft подаём НЕ как HumanMessage, а как SystemMessage-напоминание,
+    # чтобы add_messages не накапливал их в истории
     draft = state.get("draft") or {}
     if draft:
-        messages.append(
-            HumanMessage(
+        messages.insert(
+            1,
+            SystemMessage(
                 content=(
-                    "Текущий черновик кампании (источник истины):\n"
+                    "Актуальный черновик кампании (источник истины):\n"
                     f"{draft}\n\n"
-                    "Обновляй его только через инструменты, не выдумывай id."
+                    "Не выдумывай id. Используй только те, что есть в черновике. "
+                    "Не повторяй уже успешно выполненные вызовы инструментов."
                 )
-            )
+            ),
         )
+
     response = llm_tools.invoke(messages)
-    return {"messages": [response]}
+
+    log = list(state.get("debug_log") or [])
+    log.append({
+        "node": "agent",
+        "step": step_count,
+        "content": getattr(response, "content", "") or "",
+        "tool_calls": [
+            {"name": t.get("name"), "args": t.get("args")}
+            for t in (getattr(response, "tool_calls", None) or [])
+        ],
+    })
+    return {"messages": [response], "debug_log": log, "step_count": step_count}
 
 
 def should_continue(state: AgentState) -> Literal["tools", "confirm", "end"]:
+    # Предохранитель от зацикливания
+    if int(state.get("step_count") or 0) >= MAX_STEPS:
+        return "end"
+
     last = state["messages"][-1]
     if not getattr(last, "tool_calls", None):
         return "end"
@@ -80,10 +114,8 @@ def confirm_node(state: AgentState) -> dict:
         "messages": [
             AIMessage(
                 content=(
-                    "Планирую выполнить действия:\n"
-                    + "\n".join(
-                        f"• {tc['name']}({tc['args']})" for tc in write_calls
-                    )
+                    "Готов выполнить:\n"
+                    + "\n".join(f"• {tc['name']}" for tc in write_calls)
                     + "\n\nПодтвердите (да/нет)."
                 )
             )
@@ -109,6 +141,7 @@ def tools_node(state: AgentState) -> dict:
     last_errors: list = []
     last_warnings: list = []
     new_draft = dict(state.get("draft") or {})
+    log = list(state.get("debug_log") or [])
 
     for tc in last.tool_calls:
         name, args, tid = tc["name"], tc["args"], tc["id"]
@@ -138,6 +171,12 @@ def tools_node(state: AgentState) -> dict:
                 new_draft["included_segments"] = args.get("included", [])
                 new_draft["excluded_segments"] = args.get("excluded", [])
 
+        log.append({
+            "node": "tools",
+            "tool": name,
+            "args": args,
+            "result": str(result)[:2000],
+        })
         tool_messages.append(ToolMessage(content=str(result), tool_call_id=tid))
 
     return {
@@ -146,6 +185,7 @@ def tools_node(state: AgentState) -> dict:
         "draft": new_draft,
         "last_errors": last_errors,
         "last_warnings": last_warnings,
+        "debug_log": log,
     }
 
 
