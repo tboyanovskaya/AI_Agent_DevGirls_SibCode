@@ -1,432 +1,507 @@
 import streamlit as st
 import json
+from datetime import datetime
 
-# Настройка страницы (Широкий экран, заголовок и иконка)
-st.set_page_config(page_title="DevGirls | Sber AI-Campaign", layout="wide", page_icon="💚")
+# ============================================================
+# §1. DESIGN TOKENS (Sber fintech style)
+# ============================================================
+st.set_page_config(page_title="Sber AI-Campaign | DevGirls", layout="wide", page_icon="💚")
 
-# --- ТУМБЛЕР СМЕНЫ ТЕМЫ И ПАЛИТРЫ (Светлая / Hi-Tech Тёмная) ---
-with st.sidebar:
-    st.markdown("### 🎨 Управление стилем")
-    
-    # Динамический текст для тумблера
-    toggle_label = "☀️ Включить светлую экосистему" if st.session_state.get('theme_mode', False) else "🌙 Включить тёмную экосистему"
-    theme_mode = st.toggle(toggle_label, value=False, key="theme_mode")
+TOKENS = {
+    "sber_green": "#21A038",
+    "sber_green_bright": "#00D046",
+    "sber_green_dark": "#0B6B24",
+    "bg_deep": "#0A1410",
+    "bg_surface": "#122019",
+    "bg_glass": "rgba(255,255,255,0.06)",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A8B8AE",
+    "text_muted": "#6B7C72",
+    "warning": "#F5A623",
+    "danger": "#E5484D",
+    "info": "#3B82F6",
+    "violet": "#8B7CF6",
+    "border_glass": "1px solid rgba(255,255,255,0.12)",
+    "glass_blur": "backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);",
+    "radius_card": "22px",
+    "radius_btn": "12px",
+    "glow": "0 0 40px rgba(0,208,70,0.25)",
+}
 
-    st.markdown("---")
-    st.markdown("### 👤 Авторизация (ИТ-контур)")
-    user_login = st.text_input("Логин сотрудника:", value="ivanova.a")
-    user_role = st.selectbox(
-        "Роль в системе (X-Role):",
-        ["campaignManager", "campaignModerator"],
-        help="Менеджер собирает и правит. Модератор делает Approve/Decline."
+SBER_GRADIENT = "linear-gradient(135deg, #0B6B24 0%, #21A038 50%, #00D046 100%)"
+
+STATE_META = {
+    "DRAFT":           {"label": "Draft",          "dot": "#6B7C72", "bg": "rgba(107,124,114,0.15)", "fg": "#A8B8AE"},
+    "ON_MODERATION":   {"label": "On moderation",  "dot": "#F5A623", "bg": "rgba(245,166,35,0.15)",  "fg": "#F5A623"},
+    "NEEDS_WORK":      {"label": "Needs work",     "dot": "#E5484D", "bg": "rgba(229,72,77,0.15)",   "fg": "#E5484D"},
+    "APPROVED":        {"label": "Approved",       "dot": "#3B82F6", "bg": "rgba(59,130,246,0.15)",  "fg": "#3B82F6"},
+    "ACTIVE":          {"label": "Active",         "dot": "#00D046", "bg": "rgba(0,208,70,0.15)",    "fg": "#00D046"},
+    "ACTIVE_EDITING":  {"label": "Active editing", "dot": "#F5A623", "bg": "rgba(0,208,70,0.12)",    "fg": "#00D046"},
+    "STOPPED":         {"label": "Stopped",        "dot": "#4B5A50", "bg": "rgba(75,90,80,0.2)",     "fg": "#6B7C72"},
+}
+
+def state_chip(state: str, published: bool = False) -> str:
+    meta = STATE_META.get(state, STATE_META["DRAFT"])
+    pulse = "animation: pulse 1.6s infinite;" if state == "ACTIVE" else ""
+    eye = " 👁" if published else ""
+    return (
+        f'<span style="display:inline-flex; align-items:center; gap:6px; '
+        f'padding:4px 12px; border-radius:999px; font-size:12px; font-weight:600; '
+        f'background:{meta["bg"]}; color:{meta["fg"]}; border:1px solid {meta["fg"]}33;">'
+        f'<span style="width:8px; height:8px; border-radius:50%; background:{meta["dot"]}; {pulse}"></span>'
+        f'{meta["label"]}{eye}</span>'
     )
 
-# Определение цветов палитры Сбера на основе тумблера и референсов
+# ============================================================
+# SIDEBAR: theme + auth (X-User / X-Role)
+# ============================================================
+with st.sidebar:
+    st.markdown("### 🎨 Управление стилем")
+    theme_label = "☀️ Светлая экосистема" if st.session_state.get("theme_mode", False) else "🌙 Тёмная экосистема"
+    theme_mode = st.toggle(theme_label, value=False, key="theme_mode")
+
+    st.markdown("---")
+    st.markdown("### 👤 Авторизация (X-User / X-Role)")
+    user_login = st.text_input("Логин (X-User):", value="ivanova.a")
+    user_role = st.selectbox(
+        "Роль (X-Role):",
+        ["campaignManager", "campaignModerator"],
+        help="Менеджер собирает и правит. Модератор делает Approve / Decline."
+    )
+
+# -------- Theme tokens (light override per §1.1) --------
 if theme_mode:
-    bg_color = "#0B0F19"
-    text_color = "#F3F4F6"
-    card_bg = "rgba(26, 32, 44, 0.65)"
-    border_style = "1px solid rgba(255, 255, 255, 0.08)"
-    glass_effect = "backdrop-filter: blur(16px); webkit-backdrop-filter: blur(16px);"
-    chat_user_bg = "rgba(45, 55, 72, 0.7)"
-    chat_ai_bg = "rgba(4, 120, 87, 0.25)"
-    ai_glow = "box-shadow: 0 0 20px rgba(34, 197, 94, 0.2);"
-    phone_border = "#1E293B"
-    phone_bg = "#1A1A1E"
-    text_in_bubble = "#F3F4F6"
-    sidebar_bg = "#111827"
-    input_bg = "rgba(255,255,255,0.05)"
+    bg_deep = "#F4F6F8"
+    bg_surface = "#FFFFFF"
+    bg_glass = "rgba(255,255,255,0.85)"
+    text_primary = "#111827"
+    text_secondary = "#4B5563"
+    text_muted = "#6B7280"
+    border_glass = "1px solid #E5E7EB"
 else:
-    bg_color = "#F4F6F8"
-    text_color = "#111827"  # Темно-серый/почти черный
-    card_bg = "#FFFFFF"
-    border_style = "1px solid #E5E7EB"
-    glass_effect = ""
-    chat_user_bg = "#E9ECEF"
-    chat_ai_bg = "#E6F4EA"
-    ai_glow = "box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);"
-    phone_border = "#E5E7EB"
-    phone_bg = "#F3F4F6"
-    text_in_bubble = "#111827"
-    sidebar_bg = "#FFFFFF"
-    input_bg = "#FFFFFF"
+    bg_deep = TOKENS["bg_deep"]
+    bg_surface = TOKENS["bg_surface"]
+    bg_glass = TOKENS["bg_glass"]
+    text_primary = TOKENS["text_primary"]
+    text_secondary = TOKENS["text_secondary"]
+    text_muted = TOKENS["text_muted"]
+    border_glass = TOKENS["border_glass"]
 
-# Фирменные Градиенты Сбера (Изумрудный -> Салатовый -> Синий)
-sber_gradient = "linear-gradient(135deg, #00875A 0%, #22C55E 50%, #0057B7 100%)"
-
-# Применение глобальных стилей через CSS Injection
+# ============================================================
+# §1, §3 — GLOBAL CSS
+# ============================================================
 st.markdown(f"""
-    <style>
-    /* Глобальные настройки фона приложения */
-    .stApp {{ background-color: {bg_color}; }}
-    
-    /* Базовые шрифты */
-    h1, h2, h3, h4, h5, h6, p, span, label {{
-        font-family: 'SB Sans Text', 'PT Sans', 'Arial', sans-serif;
-    }}
+<style>
+@keyframes pulse {{ 0%,100%{{opacity:1}} 50%{{opacity:0.35}} }}
+.stApp {{ background: {bg_deep}; }}
+h1,h2,h3,h4,h5,h6,p,span,label,div[data-testid="stMarkdownContainer"] {{
+    font-family:'SB Sans Text','Inter','SF Pro','PT Sans',Arial,sans-serif;
+    color: {text_primary};
+}}
+section[data-testid="stSidebar"] {{ background:{bg_surface} !important; border-right:{border_glass}; }}
+section[data-testid="stSidebar"] * {{ color:{text_primary} !important; }}
+section[data-testid="stSidebar"] input, section[data-testid="stSidebar"] div[data-baseweb="select"] {{
+    background: transparent !important; border:{border_glass} !important; color:{text_primary} !important;
+}}
+button[data-baseweb="tab"] {{ color:{text_secondary} !important; }}
+button[data-baseweb="tab"][aria-selected="true"] {{ color:{TOKENS['sber_green_bright']} !important; font-weight:700; }}
+div[data-testid="stExpander"] {{ background:{bg_glass}; border:{border_glass}; border-radius:{TOKENS['radius_card']}; {TOKENS['glass_blur']} }}
+div[data-testid="stExpander"] summary {{ color:{text_primary} !important; }}
 
-    /* --- ПРИНУДИТЕЛЬНЫЙ ЦВЕТ ТЕКСТА ДЛЯ ВСЕЙ ТЕМЫ (ГЛОБАЛЬНО) --- */
-    .stMarkdown, .stMarkdown p, .stMarkdown span, .stText, .stCaption,
-    h1, h2, h3, h4, h5, h6, p, label, div[data-testid="stMarkdownContainer"] {{
-        color: {text_color} !important;
-    }}
+.surface {{
+    background:{bg_glass}; border:{border_glass}; border-radius:{TOKENS['radius_card']};
+    padding:18px; {TOKENS['glass_blur']} margin-bottom:12px;
+}}
+.topbar {{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    background:{bg_glass}; border:{border_glass}; border-radius:{TOKENS['radius_card']};
+    padding:14px 20px; {TOKENS['glass_blur']} margin-bottom:14px;
+}}
+.logo-check {{
+    width:34px; height:34px; border-radius:10px; background:{SBER_GRADIENT};
+    display:flex; align-items:center; justify-content:center; color:white; font-weight:800;
+    box-shadow:{TOKENS['glow']};
+}}
+.topbar-user {{
+    font-size:12px; color:{text_secondary}; padding:6px 12px; border-radius:999px;
+    border:{border_glass}; background:rgba(255,255,255,0.04);
+}}
+.section-title {{ font-size:13px; color:{text_secondary}; text-transform:uppercase; letter-spacing:1px; margin:0 0 10px 0; }}
 
-    /* --- ФИКС ЦВЕТА ТЕКСТА ДЛЯ НАТИВНЫХ КОМПОНЕНТОВ STREAMLIT --- */
-    /* Текст вкладок */
-    button[data-baseweb="tab"] {{
-        color: {text_color} !important;
-        opacity: 0.7;
-    }}
-    button[data-baseweb="tab"][aria-selected="true"] {{
-        color: #22C55E !important;
-        opacity: 1;
-        font-weight: bold;
-    }}
-    
-    /* Текст в инпутах и селектбоксах */
-    .stSelectbox div[data-baseweb="select"], 
-    .stTextInput input {{
-        color: {text_color} !important;
-        background-color: {input_bg} !important;
-        border: {border_style} !important;
-    }}
-    
-    /* Лейблы инпутов */
-    .stSelectbox label, .stTextInput label {{
-        color: {text_color} !important;
-        font-weight: 600;
-    }}
+.tg-bubble {{ padding:12px 16px; border-radius:20px; margin-bottom:10px; max-width:85%; font-size:14px; line-height:1.45; color:{text_primary} !important; }}
+.tg-user {{ background:rgba(33,160,56,0.25); margin-left:auto; border-bottom-right-radius:6px; border:1px solid rgba(33,160,56,0.45); }}
+.tg-ai   {{ background:{bg_glass}; margin-right:auto; border-bottom-left-radius:6px; border:{border_glass}; border-left:3px solid {TOKENS['sber_green_bright']}; }}
+.tg-sys  {{ background:rgba(255,255,255,0.03); border:1px dashed {text_muted}; font-family:'JetBrains Mono',monospace; font-size:12px; color:{text_secondary} !important; }}
 
-    /* Сайдбар */
-    section[data-testid="stSidebar"] {{
-        background-color: {sidebar_bg} !important;
-        border-right: {border_style};
-    }}
-    
-    /* Текст внутри кастомных баблов чата */
-    .chat-container-box div, .chat-container-box span, .chat-container-box p {{
-        color: {text_in_bubble} !important;
-    }}
+.stButton>button {{
+    background:{SBER_GRADIENT}; color:white !important; border:none;
+    border-radius:{TOKENS['radius_btn']}; font-weight:600; padding:8px 14px; transition:transform .15s;
+}}
+.stButton>button:hover:not(:disabled) {{ transform:translateY(-1px); box-shadow:{TOKENS['glow']}; }}
+.stButton>button:disabled {{ background:rgba(255,255,255,0.08) !important; color:{text_muted} !important; }}
 
-    /* Сбер Градиент для главного заголовка */
-    .sber-title {{
-        background: {sber_gradient};
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 800;
-        font-size: 2.2rem;
-        margin-bottom: 1.5rem;
-    }}
+.sber-phone {{
+    background:{bg_surface}; border:8px solid {bg_surface}; border-radius:40px; padding:16px;
+    max-width:340px; margin:0 auto; border:{border_glass}; box-shadow:0 15px 40px rgba(0,0,0,0.35);
+}}
+.phone-top {{ background:{SBER_GRADIENT}; color:white !important; padding:8px; border-radius:12px;
+    text-align:center; font-weight:700; font-size:12px; letter-spacing:.4px; }}
+.phone-wallet {{ background:rgba(128,128,128,0.12); border:{border_glass}; padding:12px; border-radius:16px; margin:12px 0; }}
+.story-frame {{ aspect-ratio:9/16; width:100%; max-width:220px; margin:8px auto; border-radius:20px; overflow:hidden;
+    background:linear-gradient(160deg,#0B6B24,#21A038); color:white; display:flex; flex-direction:column; justify-content:flex-end; padding:14px; }}
+.story-frame .title {{ font-size:16px; font-weight:800; color:white !important; }}
+.story-frame .text {{ font-size:11px; color:rgba(255,255,255,0.9) !important; margin-top:4px; }}
+.story-frame .cta {{ margin-top:10px; text-align:center; background:white; color:#0B6B24 !important; padding:6px; border-radius:8px; font-size:11px; font-weight:700; }}
 
-    /* СТИЛИЗАЦИЯ ЧАТА ПОД ТЕЛЕГРАМ С КАНОНАМИ СБЕРА */
-    .chat-container-box {{
-        background-color: {card_bg};
-        border: {border_style};
-        border-radius: 24px;
-        padding: 20px;
-        {glass_effect}
-        margin-bottom: 15px;
-        /* Убираем пустое пространство, если контента нет */
-        display: block;
-    }}
-    .tg-bubble {{
-        padding: 12px 18px;
-        border-radius: 20px;
-        margin-bottom: 12px;
-        max-width: 80%;
-        font-size: 14px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-    }}
-    .tg-user {{
-        background-color: {chat_user_bg};
-        margin-left: auto;
-        border-bottom-right-radius: 4px;
-        border: {border_style};
-    }}
-    .tg-ai {{
-        background-color: {chat_ai_bg};
-        margin-right: auto;
-        border-bottom-left-radius: 4px;
-        border-left: 4px solid #22C55E;
-        {ai_glow}
-    }}
+.val-error {{ background:rgba(229,72,77,0.12); border-left:3px solid {TOKENS['danger']}; padding:8px 12px; border-radius:8px; margin-bottom:6px; font-size:12px; color:{text_primary} !important; }}
+.val-warn  {{ background:rgba(245,166,35,0.12); border-left:3px solid {TOKENS['warning']}; padding:8px 12px; border-radius:8px; margin-bottom:6px; font-size:12px; color:{text_primary} !important; }}
 
-    /* ИМИТАЦИЯ СМАРТФОНА СБЕРОНЛАЙН (ПО РЕФЕРЕНСАМ) */
-    .sber-phone {{
-        background-color: {card_bg};
-        border: 10px solid {phone_border};
-        border-radius: 44px;
-        padding: 20px;
-        width: 100%;
-        max-width: 350px;
-        margin: 0 auto;
-        {glass_effect}
-        box-shadow: 0 15px 35px rgba(0,0,0,0.15);
-        color: {text_color} !important;
-    }}
-    .phone-top {{
-        background: {sber_gradient};
-        color: white !important;
-        padding: 10px;
-        border-radius: 14px;
-        font-weight: bold;
-        text-align: center;
-        font-size: 13px;
-        letter-spacing: 0.5px;
-    }}
-    .phone-wallet {{
-        background-color: rgba(128, 128, 128, 0.1);
-        border: {border_style};
-        padding: 14px;
-        border-radius: 18px;
-        margin: 15px 0;
-        color: {text_color} !important;
-    }}
-    .promo-banner {{
-        background-color: {card_bg};
-        border: 2px solid #22C55E;
-        border-radius: 20px;
-        padding: 14px;
-        box-shadow: 0 8px 20px rgba(34,197,94,0.15);
-        color: {text_color} !important;
-    }}
+.confirm-card {{ background:rgba(245,166,35,0.10); border:1px solid {TOKENS['warning']}; border-radius:18px; padding:14px; margin-bottom:12px; }}
 
-    /* Кнопки */
-    .stButton>button {{
-        background: {sber_gradient};
-        color: white !important;
-        border-radius: 12px;
-        border: none;
-        font-weight: 600;
-        padding: 10px 20px;
-        transition: transform 0.2s;
-    }}
-    .stButton>button:hover {{
-        transform: scale(1.02);
-        color: white !important;
-    }}
-    
-    /* Экспандеры и алерты */
-    div[data-testid="stExpander"] summary,
-    div[data-testid="stExpander"] p,
-    div[data-testid="stAlert"] p {{
-        color: {text_color} !important;
-    }}
-    
-    /* --- ПЛАВАЮЩИЙ КОТ СБЕРА (Внизу справа) --- */
-    .floating-cat {{
-        position: fixed;
-        bottom: 90px;
-        right: 30px;
-        width: 180px;
-        height: 180px;
-        z-index: 9999;
-        pointer-events: none;
-        transition: all 0.4s ease-in-out;
-        filter: drop-shadow(0px 10px 15px rgba(0,0,0,0.2));
-    }}
-    .floating-cat img {{
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-    }}
-    </style>
+.audit-item {{ border-left:2px solid {TOKENS['sber_green']}; padding:6px 12px; margin-bottom:8px; font-size:12px; color:{text_secondary} !important; }}
+.audit-item b {{ color:{text_primary} !important; }}
+
+.rail-item {{ padding:10px 12px; border-radius:14px; border:{border_glass}; background:{bg_glass}; margin-bottom:8px; cursor:pointer; }}
+.rail-item .name {{ font-weight:600; font-size:13px; color:{text_primary} !important; margin-bottom:6px; }}
+
+.floating-cat {{ position:fixed; bottom:90px; right:24px; width:150px; height:150px; z-index:9999; pointer-events:none;
+    filter:drop-shadow(0 10px 20px rgba(0,0,0,0.35)); transition:all .4s ease; }}
+.floating-cat img {{ width:100%; height:100%; object-fit:contain; }}
+</style>
 """, unsafe_allow_html=True)
 
-# --- ЛОГИКА СОСТОЯНИЙ И ВЫБОРА КАРТИНКИ КОТА ---
-state = st.session_state.get('campaign_draft', {}).get('state', 'DRAFT')
+# ============================================================
+# §3.1 / §6 — STATE
+# ============================================================
+if "campaigns" not in st.session_state:
+    st.session_state.campaigns = [
+        {"id": "101", "name": "Кредитка Молодежная", "state": "DRAFT", "published": False},
+        {"id": "102", "name": "Вклад «Копи и копи»", "state": "ON_MODERATION", "published": False},
+        {"id": "103", "name": "Ипотека. Новостройки", "state": "APPROVED", "published": False},
+        {"id": "104", "name": "Кэшбэк на СберМаркет", "state": "NEEDS_WORK", "published": False},
+        {"id": "105", "name": "Подписка СберПрайм", "state": "ACTIVE", "published": True},
+    ]
 
-if state == "ON_MODERATION":
-    cat_img = "https://i.ibb.co/68QZ6K5/cat-think.png" # Задумчивый
-elif state == "NEEDS_WORK":
-    cat_img = "https://i.ibb.co/3sXbY9v/cat-sad.png"   # Грустный (доработка)
-elif state == "ACTIVE":
-    cat_img = "https://i.ibb.co/1QZ6K5/cat-happy.png"  # Радостный (в проде)
-else:
-    cat_img = "https://i.ibb.co/1QZ6K5/cat-happy.png"  # Веселый (по умолчанию)
+if "active_campaign_id" not in st.session_state:
+    st.session_state.active_campaign_id = "101"
 
-# Рендерим плавающего кота
-st.markdown(f"""
-    <div class="floating-cat">
-        <img src="{cat_img}" alt="СберКот">
-    </div>
-""", unsafe_allow_html=True)
-
-st.markdown('<div class="sber-title">💚 Сбер AI-Campaign Оркестратор | Команда DevGirls</div>', unsafe_allow_html=True)
-
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-if 'campaign_draft' not in st.session_state:
+if "campaign_draft" not in st.session_state:
     st.session_state.campaign_draft = {
-        "id": "—", "name": "Не задано", "state": "DRAFT", "published": "false",
-        "topic": {"value": "NONE", "label": "Не задана"}, 
-        "startDate": "—", "startTime": "—",
-        "audienceType": {"value": "ALL_USERS", "label": "Все пользователи"}, 
-        "places": [], 
+        "id": "101",
+        "name": "Кредитка Молодежная",
+        "state": "DRAFT",
+        "published": False,
+        "topic": {"value": "CREDIT_CARDS", "label": "Кредитные карты"},
+        "startDate": "—",
+        "startTime": "—",
+        "audienceType": {"value": "ALL_USERS", "label": "Все пользователи"},
+        "places": [],
         "segments": {"included": [], "excluded": []},
-        "warnings": []
+        "banner": None,
+        "warnings": [],
+        "errors": [],
+        "audit": [],
     }
 
-col1, col2 = st.columns([1.1, 1])
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-with col1:
-    st.markdown("### 💬 Агент-Оркестратор")
-    
-    # Рендерим контейнер только если есть сообщения или это первое сообщение
+if "pending_action" not in st.session_state:
+    st.session_state.pending_action = None
+
+draft = st.session_state.campaign_draft
+
+def log_audit(entity: str, action: str, actor: str, changes: dict):
+    draft["audit"].append({
+        "at": datetime.now().strftime("%H:%M:%S"),
+        "entity": entity, "action": action, "actor": actor, "changes": changes,
+    })
+
+def validate(d):
+    errors, warnings = [], []
+    if not d["places"]:
+        errors.append("Не указаны места показа (places).")
+    if d["startDate"] == "—" or d["startTime"] == "—":
+        errors.append("Не задано расписание показа (startDate / startTime).")
+    if not d["segments"]["included"]:
+        warnings.append("Не выбрано ни одного сегмента включения.")
+    if d.get("banner") is None:
+        warnings.append("Креатив ещё не сгенерирован.")
+    if not d.get("warnings") and d["places"]:
+        warnings.append("У кампании отсутствуют теги.")
+    if len(d.get("name", "")) > 100:
+        errors.append("Название превышает лимит 100 символов для STORY.")
+    d["errors"] = errors
+    d["warnings"] = warnings
+    return d
+
+validate(draft)
+
+# ============================================================
+# §3.1 — FLOATING CAT (state-driven)
+# ============================================================
+state = draft.get("state", "DRAFT")
+if state in ("ON_MODERATION", "ACTIVE_EDITING"):
+    cat_img = "https://i.ibb.co/68QZ6K5/cat-think.png"
+elif state in ("NEEDS_WORK", "STOPPED"):
+    cat_img = "https://i.ibb.co/3sXbY9v/cat-sad.png"
+elif state == "ACTIVE":
+    cat_img = "https://i.ibb.co/1QZ6K5/cat-happy.png"
+else:
+    cat_img = "https://i.ibb.co/1QZ6K5/cat-happy.png"
+
+st.markdown(f'<div class="floating-cat"><img src="{cat_img}" alt="SberCat"></div>', unsafe_allow_html=True)
+
+# ============================================================
+# TOPBAR (§2.1)
+# ============================================================
+role_badge = "Moderator" if user_role == "campaignModerator" else "Manager"
+st.markdown(f"""
+<div class="topbar">
+  <div style="display:flex; align-items:center; gap:12px;">
+    <div class="logo-check">✓</div>
+    <div>
+      <div style="font-weight:800; font-size:16px; color:{text_primary};">Sber AI-Campaign</div>
+      <div style="font-size:11px; color:{text_secondary};">{draft['name']} · {state_chip(draft['state'], draft.get('published', False))}</div>
+    </div>
+  </div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <span class="topbar-user">X-User: {user_login}</span>
+    <span class="topbar-user">X-Role: <b style="color:{TOKENS['sber_green_bright']};">{role_badge}</b></span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# LAYOUT: Chat (left) + Preview/Passport/Campaigns (right)
+# ============================================================
+col_chat, col_insp = st.columns([2, 1.4])
+
+# ---------- CHAT ----------
+with col_chat:
+    st.markdown('<div class="section-title">💬 Агент-Оркестратор</div>', unsafe_allow_html=True)
+    st.markdown('<div class="surface">', unsafe_allow_html=True)
     if not st.session_state.chat_history:
-        st.markdown('<div class="chat-container-box">', unsafe_allow_html=True)
-        st.markdown('<div class="tg-bubble tg-ai">🤖 **AI-Агент:** Привет! Я готов собрать и валидировать рекламную кампанию по вашему текстовому брифу. Напишите параметры.</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="tg-bubble tg-ai">🤖 <b>Агент:</b> Привет! Опишите бриф — соберу черновик, '
+            'подберу сегменты и места, покажу превью перед отправкой на модерацию.</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="tg-bubble tg-sys">⚙ example tools: get_segments(), suggest_places(), generate_creative()</div>',
+            unsafe_allow_html=True,
+        )
     else:
-        st.markdown('<div class="chat-container-box">', unsafe_allow_html=True)
         for msg in st.session_state.chat_history:
-            bubble_type = "tg-user" if msg["role"] == "user" else "tg-ai"
-            st.markdown(f'<div class="tg-bubble {bubble_type}">{msg["content"]}</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+            role = msg["role"]
+            cls = {"user": "tg-user", "assistant": "tg-ai", "tool": "tg-sys"}.get(role, "tg-ai")
+            st.markdown(f'<div class="tg-bubble {cls}">{msg["content"]}</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    user_input = st.chat_input("Введите бриф...")
+    user_input = st.chat_input("Опишите бриф, например: кредитка для молодёжи, старт 5 ноября 10:00")
 
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
-        is_youth = "молодеж" in user_input.lower() or "кредитк" in user_input.lower()
-        is_date = "5 ноября" in user_input.lower() or "10:00" in user_input.lower()
+        text = user_input.lower()
 
-        if is_youth:
-            ai_response = (
-                "🤖 **AI-Оркестратор:** Бриф принят! Подключаюсь к базам данных Сбера.\n\n"
-                "• **Извлечен сегмент:** `SEG_YOUTH_18` (Молодёжь от 18 до 25 лет).\n"
-                "• **Определен плейсмент:** `mainScreenStories` (Формат: STORY).\n\n"
-                "⚠️ **Slot-Filling:** В запросе не хватает обязательных полей: `startDate` и `startTime`. С какого числа и времени запускаем показ рекламы?"
-            )
-            st.session_state.campaign_draft.update({
-                "name": "Акция: Кредитные карты для студентов",
-                "topic": {"value": "CREDIT_CARDS", "label": "Кредитные карты"},
-                "audienceType": {"value": "SEGMENTED", "label": "По сегментам"},
-                "places": ["mainScreenStories"],
-                "segments": {"included": ["SEG_YOUTH_18"], "excluded": ["EXC_UNSUBSCRIBED"]},
-                "warnings": ["У кампании отсутствуют теги", "Не для всех мест показа настроены креативы"]
+        st.session_state.chat_history.append({
+            "role": "tool",
+            "content": "⚙ orchestrator.parse_brief(text) → intent, slots"
+        })
+
+        if "молодеж" in text or "кредитк" in text:
+            draft["name"] = "Кредитка Молодежная"
+            draft["topic"] = {"value": "CREDIT_CARDS", "label": "Кредитные карты"}
+            draft["audienceType"] = {"value": "SEGMENTED", "label": "По сегментам"}
+            draft["segments"]["included"] = ["SEG_YOUTH_18"]
+            draft["segments"]["excluded"] = ["EXC_UNSUBSCRIBED"]
+            draft["places"] = ["mainScreenStories"]
+            st.session_state.chat_history.append({
+                "role": "assistant",
+                "content": (
+                    "🤖 <b>Агент:</b> Бриф принят. Извлёк сегмент <code>SEG_YOUTH_18</code> (18–25, ~2.4M клиентов) "
+                    "и плейсмент <code>mainScreenStories</code> (STORY).<br><br>"
+                    "⚠️ Не хватает расписания — <b>с какого числа и времени запускаем показ?</b>"
+                ),
             })
-        elif is_date:
-            ai_response = (
-                "🤖 **AI-Оркестратор:** Расписание зафиксировано. Вызываю команду `generate_creative`.\n\n"
-                "🎉 **Все обязательные слоты успешно заполнены (0 ошибок)!** Сгенерирован валидный JSON баннера. "
-                "Проверьте превью экрана смартфона справа и подтвердите отправку на модерацию."
-            )
-            st.session_state.campaign_draft.update({
-                "id": "101", "startDate": "2026-11-05", "startTime": "10:00", "state": "DRAFT"
+        elif "5 ноября" in text or "10:00" in text:
+            draft["startDate"] = "2026-11-05"
+            draft["startTime"] = "10:00"
+            draft["banner"] = {
+                "title": "Кредитка Молодежная",
+                "text": "Ставка 16% для студентов. Кэшбэк на всё.",
+                "cta": "Оформить в 1 клик",
+            }
+            st.session_state.chat_history.append({
+                "role": "tool",
+                "content": "⚙ generate_creative(topic='CREDIT_CARDS') → banner JSON (validated)"
+            })
+            st.session_state.chat_history.append({
+                "role": "assistant",
+                "content": (
+                    "🤖 <b>Агент:</b> Расписание зафиксировано. Сгенерирован валидный креатив. "
+                    "Проверьте превью справа и отправьте на модерацию через Confirmation Card."
+                ),
             })
         else:
-            ai_response = "🤖 **AI-Агент:** Принял информацию в контекст сессии. Корректирую параметры черновика рекламной кампании."
+            st.session_state.chat_history.append({
+                "role": "assistant",
+                "content": "🤖 <b>Агент:</b> Уточните, пожалуйста, тему кампании (например, «кредитка для молодёжи»)."
+            })
 
-        st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
+        validate(draft)
         st.rerun()
 
-with col2:
-    st.markdown("### 📋 Инспекция и Предпросмотр")
-    draft = st.session_state.campaign_draft
-    tab1, tab2 = st.tabs(["📱 Превью СберОнлайн", "⚙️ ИТ-Паспорт (Доменная модель)"])
-
-    with tab1:
-        st.write(" ")
+    # ---------- CONFIRMATION CARD (§3.3) ----------
+    if st.session_state.pending_action:
+        pa = st.session_state.pending_action
         st.markdown(f"""
-            <div class="sber-phone">
-                <div class="phone-top">СберБанк Онлайн</div>
-                <div class="phone-wallet">
-                    <div style="font-size: 11px; opacity: 0.7; color: {text_color};">Карты и счета</div>
-                    <div style="font-size: 20px; font-weight: bold; margin-top: 2px; color: {text_color};">129 500 ₽</div>
-                </div>
-                <div style="font-weight: 600; font-size: 13px; margin-bottom: 10px; color: {text_color};">Рекомендовано вам:</div>
+        <div class="confirm-card">
+          <div style="font-weight:700; color:{text_primary};">⚠️ Требуется подтверждение</div>
+          <div style="font-size:13px; color:{text_secondary}; margin-top:6px;">
+            Действие: <b>POST /{pa['kind']}</b><br>
+            Изменения: <code>{pa['payload']}</code>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        c1, c2 = st.columns([1, 1])
+        if c1.button("✓ Подтвердить", key="confirm_action", use_container_width=True):
+            if pa["kind"] == "create_campaign":
+                new_id = str(200 + len(st.session_state.campaigns))
+                st.session_state.campaigns.append({
+                    "id": new_id, "name": pa["payload"]["name"], "state": "DRAFT", "published": False
+                })
+                log_audit("campaign", "create", user_login, pa["payload"])
+            elif pa["kind"] == "to_moderation":
+                st.session_state.campaign_draft["state"] = "ON_MODERATION"
+                log_audit("campaign", "to_moderation", user_login, {"state": "ON_MODERATION"})
+            elif pa["kind"] == "approve":
+                st.session_state.campaign_draft["state"] = "APPROVED"
+                log_audit("campaign", "approve", user_login, {"state": "APPROVED"})
+            elif pa["kind"] == "decline":
+                st.session_state.campaign_draft["state"] = "NEEDS_WORK"
+                log_audit("campaign", "decline", user_login, {"state": "NEEDS_WORK"})
+            elif pa["kind"] == "activate":
+                st.session_state.campaign_draft["state"] = "ACTIVE"
+                st.session_state.campaign_draft["published"] = True
+                log_audit("campaign", "activate", user_login, {"published": True})
+            st.session_state.pending_action = None
+            st.rerun()
+        if c2.button("✕ Отмена", key="cancel_action", use_container_width=True):
+            st.session_state.pending_action = None
+            st.rerun()
+
+# ---------- RIGHT: TABS (Preview / Passport / Campaigns) ----------
+with col_insp:
+    st.markdown('<div class="section-title">📋 Инспекция и Предпросмотр</div>', unsafe_allow_html=True)
+
+    tab_preview, tab_passport, tab_campaigns = st.tabs(
+        ["📱 Превью", "⚙️ ИТ-паспорт", "🗂 Кампании"]
+    )
+
+    # --- TAB 1: PREVIEW ---
+    with tab_preview:
+        banner = draft.get("banner")
+        st.markdown(f"""
+        <div class="sber-phone">
+          <div class="phone-top">СберБанк Онлайн</div>
+          <div class="phone-wallet">
+            <div style="font-size:11px; color:{text_secondary};">Карты и счета</div>
+            <div style="font-size:20px; font-weight:800; color:{text_primary};">129 500 ₽</div>
+          </div>
+          <div style="font-size:12px; font-weight:600; margin-bottom:8px; color:{text_primary};">Рекомендовано вам:</div>
+          <div class="story-frame">
+            <div class="title">{banner['title'] if banner else '—'}</div>
+            <div class="text">{banner['text'] if banner else 'Ожидание креатива...'}</div>
+            <div class="cta">{banner['cta'] if banner else 'CTA'}</div>
+          </div>
+        </div>
         """, unsafe_allow_html=True)
 
-        if draft['id'] != "—":
-            st.markdown(f"""
-                <div class="promo-banner">
-                    <div style="color: #00875A; font-weight: bold; font-size: 14px;">🔥 Кредитка Молодежная</div>
-                    <div style="font-size: 11px; margin-top: 4px; opacity: 0.85; line-height: 1.3; color: {text_color};">Ставка 16% для студентов. Кэшбэк на всё в СберМаркете!</div>
-                    <div style="background: {sber_gradient}; color: white; text-align: center; padding: 7px; border-radius: 10px; font-size: 11px; font-weight: bold; margin-top: 10px; cursor: pointer;">
-                        Оформить в 1 клик
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-                <div style="border: 2px dashed rgba(128,128,128,0.3); border-radius: 20px; padding: 30px; text-align: center; font-size: 12px; opacity: 0.6; color: {text_color};">
-                    Ожидание автоматической генерации ИИ-креатива...
-                </div>
-            """, unsafe_allow_html=True)
+        st.markdown('<div class="section-title" style="margin-top:14px;">Валидация</div>', unsafe_allow_html=True)
+        if draft["errors"]:
+            for e in draft["errors"]:
+                st.markdown(f'<div class="val-error">⛔ {e}</div>', unsafe_allow_html=True)
+        if draft["warnings"]:
+            for w in draft["warnings"]:
+                st.markdown(f'<div class="val-warn">⚠️ {w}</div>', unsafe_allow_html=True)
+        if not draft["errors"] and not draft["warnings"]:
+            st.markdown(
+                f'<div class="val-warn" style="background:rgba(0,208,70,0.12); border-color:{TOKENS["sber_green"]};">✓ Валидация пройдена</div>',
+                unsafe_allow_html=True,
+            )
 
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.write(" ")
+    # --- TAB 2: PASSPORT ---
+    with tab_passport:
+        st.markdown('<div class="surface">', unsafe_allow_html=True)
+        st.write(f"**ID:** {draft['id']} · **state:** {draft['state']} · **published:** {draft['published']}")
+        st.write(f"**topic:** {draft['topic']}")
+        st.write(f"**audienceType:** {draft['audienceType']}")
+        st.write(f"**places:** {draft['places'] or '—'}")
+        st.write(f"**segments.included:** {draft['segments']['included'] or '—'}")
+        st.write(f"**startDate / startTime:** {draft['startDate']} {draft['startTime']}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        with st.expander("🛠 Показать системный JSON баннера для Бэкенда (§2.6)"):
-            if draft['id'] != "—":
+        if banner:
+            with st.expander("🛠 JSON креатива (как отправим в Content Broker)"):
                 st.code(json.dumps({
-                    "name": "Креатив Студенческий",
+                    "name": banner["title"],
                     "bannerTypeId": 2,
                     "content": {
-                        "title": "Кредитка Молодежная",
-                        "text": "Ставка 16% для студентов.",
+                        "title": banner["title"],
+                        "text": banner["text"],
                         "actionType": "openSmartLink",
                         "link": {"iOS": "sberbank://smartlink/youth", "android": "sberbank://smartlink/youth"}
                     }
                 }, indent=2, ensure_ascii=False), language="json")
-            else:
-                st.info("JSON-контент будет сгенерирован автоматически после заполнения паспорта.")
+        else:
+            st.info("JSON появится после генерации креатива.")
 
-    with tab2:
-        st.write(" ")
-        st.write(f"ID кампании в БД: {draft['id']} | name: {draft['name']}")
-        st.write(f"Тематика (topic): {{'value': '{draft['topic']['value']}', 'label': '{draft['topic']['label']}'}}")
-        st.write(f"Аудитория (audienceType): {{'value': '{draft['audienceType']['value']}', 'label': '{draft['audienceType']['label']}'}}")
-        st.write(f"Коды сегментов включения: {draft['segments']['included']}")
-        st.write(f"Плейсменты (PLACES): {draft['places']}")
-        st.write(f"Расписание показа: с {draft['startDate']} в {draft['startTime']}")
-        st.write(f"Состояние ЖЦ (state): {draft['state']} | published (Content Broker): {draft['published']}")
-        
-        # --- БЛОК WARNINGS (ПРЕДУПРЕЖДЕНИЯ) ---
-        if draft.get('warnings'):
-            st.write(" ")
-            st.warning("⚠️ **Предупреждения (не блокируют модерацию):**")
-            for warn in draft['warnings']:
-                st.markdown(f"- {warn}")
-                
-        st.write(" ")
+        st.markdown('<div class="section-title" style="margin-top:12px;">Audit</div>', unsafe_allow_html=True)
+        if not draft["audit"]:
+            st.caption("Пока нет записей.")
+        for a in reversed(draft["audit"][-6:]):
+            st.markdown(
+                f'<div class="audit-item"><b>{a["at"]}</b> · {a["action"]} · {a["actor"]} '
+                f'<br><span style="font-size:11px;">{a["changes"]}</span></div>',
+                unsafe_allow_html=True,
+            )
 
-        st.markdown("### 🛠 Управление Жизненным Циклом (API Сбера)")
-        b1, b2, b3, b4 = st.columns(4)
-        
-        if b1.button("🚀 На модерацию", use_container_width=True):
-            if draft['id'] == "—":
-                st.error("Ошибка API: Обязательные слоты пусты. Сначала заполните бриф в чате.")
-            else:
-                st.session_state.campaign_draft["state"] = "ON_MODERATION"
-                st.success("HTTP 200: Статус успешно изменен на ON_MODERATION")
-                st.rerun()
+    # --- TAB 3: CAMPAIGNS (перенесено из Left Rail) ---
+    with tab_campaigns:
+        st.markdown('<div class="section-title">Список кампаний</div>', unsafe_allow_html=True)
 
-        if b2.button("✅ Одобрить (Approve)", use_container_width=True):
-            if user_role != "campaignModerator":
-                st.error("ИБ-Ошибка [ROLE_FORBIDDEN]: Данное действие доступно только роли модератора.")
-            elif draft['state'] != "ON_MODERATION":
-                st.error("Ошибка бэкенда [APPROVE_NOT_ALLOWED]: Нельзя одобрить кампанию, не находящуюся на модерации.")
-            else:
-                st.session_state.campaign_draft["state"] = "APPROVED"
-                st.success("HTTP 200: Одобрено! Статус изменен на APPROVED")
-                st.rerun()
+        filter_state = st.selectbox(
+            "Фильтр по state",
+            ["Все", "DRAFT", "ON_MODERATION", "NEEDS_WORK", "APPROVED", "ACTIVE", "STOPPED"],
+            label_visibility="collapsed",
+            key="rail_filter_state",
+        )
 
-        if b3.button("⚡ Активировать (В прод)", use_container_width=True):
-            if draft['state'] != "APPROVED":
-                st.error("Ошибка бэкенда [ACTIVATE_NOT_ALLOWED]: Публикация в Content Broker невозможна без статуса APPROVED.")
-            else:
-                st.session_state.campaign_draft["state"] = "ACTIVE"
-                st.session_state.campaign_draft["published"] = "true"
-                st.balloons()
-                st.success("🎉 Успешно выгружено в Content Broker Сбера! Показ активен.")
-                st.rerun()
-                
-        if b4.button("❌ На доработку", use_container_width=True):
-            if user_role != "campaignModerator":
-                st.error("ИБ-Ошибка [ROLE_FORBIDDEN]: Данное действие доступно только роли модератора.")
-            else:
-                st.session_state.campaign_draft["state"] = "NEEDS_WORK"
-                st.error("Кампания отправлена на доработку (NEEDS_WORK).")
+        if st.button("➕ Новая кампания", use_container_width=True, key="btn_new_campaign"):
+            st.session_state.pending_action = {
+                "kind": "create_campaign",
+                "payload": {"name": "Новая кампания", "topic": "NEW"},
+            }
+            st.rerun()
+
+        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+        for c in st.session_state.campaigns:
+            if filter_state != "Все" and c["state"] != filter_state:
+                continue
+            is_active = c["id"] == st.session_state.active_campaign_id
+            border = f"2px solid {TOKENS['sber_green_bright']}" if is_active else border_glass
+            st.markdown(f"""
+            <div class="rail-item" style="border:{border};">
+              <div class="name">{c['name']}</div>
+              {state_chip(c['state'], c['published'])}
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"Открыть #{c['id']}", key=f"open_{c['id']}", use_container_width=True):
+                st.session_state.active_campaign_id = c["id"]
+                draft["id"] = c["id"]
+                draft["name"] = c["name"]
+                draft["state"] = c["state"]
+                draft["published"] = c["published"]
                 st.rerun()
