@@ -8,3 +8,5 @@ pydantic==2.10.4
 grandalf==0.8
 streamlit==1.40.0
 requests==2.32.3
+beautifulsoup4==4.12.3
+urllib3==2.2.3
