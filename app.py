@@ -161,7 +161,7 @@ div[data-testid="stExpander"] summary {{ color:{text_primary} !important; }}
 .audit-item {{ border-left:2px solid {TOKENS['sber_green']}; padding:6px 12px; margin-bottom:8px; font-size:12px; color:{text_secondary} !important; }}
 .audit-item b {{ color:{text_primary} !important; }}
 
-.rail-item {{ padding:10px 12px; border-radius:14px; border:{border_glass}; background:{bg_glass}; margin-bottom:8px; cursor:pointer; }}
+.rail-item {{ padding:10px 12px; border-radius:14px; border:{border_glass}; background:{bg_glass}; margin-bottom:8px; }}
 .rail-item .name {{ font-weight:600; font-size:13px; color:{text_primary} !important; margin-bottom:6px; }}
 
 .floating-cat {{ position:fixed; bottom:90px; right:24px; width:150px; height:150px; z-index:9999; pointer-events:none;
@@ -291,23 +291,24 @@ col_chat, col_insp = st.columns([2, 1.4])
 # ---------- CHAT ----------
 with col_chat:
     st.markdown('<div class="section-title">💬 Агент-Оркестратор</div>', unsafe_allow_html=True)
-    st.markdown('<div class="surface">', unsafe_allow_html=True)
+
+    # Один цельный HTML-блок вместо раздельных открывающих/закрывающих <div>
+    parts = ['<div class="surface">']
     if not st.session_state.chat_history:
-        st.markdown(
+        parts.append(
             '<div class="tg-bubble tg-ai">🤖 <b>Агент:</b> Привет! Опишите бриф — соберу черновик, '
-            'подберу сегменты и места, покажу превью перед отправкой на модерацию.</div>',
-            unsafe_allow_html=True,
+            'подберу сегменты и места, покажу превью перед отправкой на модерацию.</div>'
         )
-        st.markdown(
-            '<div class="tg-bubble tg-sys">⚙ example tools: get_segments(), suggest_places(), generate_creative()</div>',
-            unsafe_allow_html=True,
+        parts.append(
+            '<div class="tg-bubble tg-sys">⚙ example tools: get_segments(), suggest_places(), generate_creative()</div>'
         )
     else:
         for msg in st.session_state.chat_history:
             role = msg["role"]
             cls = {"user": "tg-user", "assistant": "tg-ai", "tool": "tg-sys"}.get(role, "tg-ai")
-            st.markdown(f'<div class="tg-bubble {cls}">{msg["content"]}</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+            parts.append(f'<div class="tg-bubble {cls}">{msg["content"]}</div>')
+    parts.append('</div>')
+    st.markdown("".join(parts), unsafe_allow_html=True)
 
     user_input = st.chat_input("Опишите бриф, например: кредитка для молодёжи, старт 5 ноября 10:00")
 
@@ -361,7 +362,7 @@ with col_chat:
             })
 
         validate(draft)
-        st.rerun()
+        # st.rerun() убран — Streamlit сам перерисует после обработчика
 
     # ---------- CONFIRMATION CARD (§3.3) ----------
     if st.session_state.pending_action:
@@ -413,129 +414,129 @@ with col_chat:
                     "content": "🤖 <b>Агент:</b> Кампания удалена. Можете начать новую — просто опишите бриф.",
                 })
             st.session_state.pending_action = None
-            st.rerun()
+            # st.rerun() убран
         if c2.button("✕ Отмена", key="cancel_action", use_container_width=True):
             st.session_state.pending_action = None
-            st.rerun()
+            # st.rerun() убран
 
 # ---------- RIGHT: TABS ----------
 with col_insp:
-    st.markdown('<div class="section-title">📋 Инспекция и Предпросмотр</div>', unsafe_allow_html=True)
+    insp_viewport = st.empty()
+    with insp_viewport.container():
+        st.markdown('<div class="section-title">📋 Инспекция и Предпросмотр</div>', unsafe_allow_html=True)
 
-    tab_preview, tab_passport, tab_campaigns = st.tabs(
-        ["📱 Превью", "⚙️ ИТ-паспорт", "🗂 Кампании"]
-    )
-
-    # --- TAB 1: PREVIEW ---
-    with tab_preview:
-        banner = draft.get("banner")
-        st.markdown(f"""
-        <div class="sber-phone">
-          <div class="phone-top">СберБанк Онлайн</div>
-          <div class="phone-wallet">
-            <div style="font-size:11px; color:{text_secondary};">Карты и счета</div>
-            <div style="font-size:20px; font-weight:800; color:{text_primary};">129 500 ₽</div>
-          </div>
-          <div style="font-size:12px; font-weight:600; margin-bottom:8px; color:{text_primary};">Рекомендовано вам:</div>
-          <div class="story-frame">
-            <div class="title">{banner['title'] if banner else '—'}</div>
-            <div class="text">{banner['text'] if banner else 'Ожидание креатива...'}</div>
-            <div class="cta">{banner['cta'] if banner else 'CTA'}</div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown('<div class="section-title" style="margin-top:14px;">Валидация</div>', unsafe_allow_html=True)
-        if draft["errors"]:
-            for e in draft["errors"]:
-                st.markdown(f'<div class="val-error">⛔ {e}</div>', unsafe_allow_html=True)
-        if draft["warnings"]:
-            for w in draft["warnings"]:
-                st.markdown(f'<div class="val-warn">⚠️ {w}</div>', unsafe_allow_html=True)
-        if not draft["errors"] and not draft["warnings"]:
-            st.markdown(
-                f'<div class="val-warn" style="background:rgba(0,208,70,0.12); border-color:{TOKENS["sber_green"]};">✓ Валидация пройдена</div>',
-                unsafe_allow_html=True,
-            )
-
-    # --- TAB 2: PASSPORT ---
-    with tab_passport:
-        st.markdown('<div class="surface">', unsafe_allow_html=True)
-        st.write(f"**ID:** {draft['id']} · **state:** {draft['state']} · **published:** {draft['published']}")
-        st.write(f"**topic:** {draft['topic']}")
-        st.write(f"**audienceType:** {draft['audienceType']}")
-        st.write(f"**places:** {draft['places'] or '—'}")
-        st.write(f"**segments.included:** {draft['segments']['included'] or '—'}")
-        st.write(f"**startDate / startTime:** {draft['startDate']} {draft['startTime']}")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        if banner:
-            with st.expander("🛠 JSON креатива (как отправим в Content Broker)"):
-                st.code(json.dumps({
-                    "name": banner["title"],
-                    "bannerTypeId": 2,
-                    "content": {
-                        "title": banner["title"],
-                        "text": banner["text"],
-                        "actionType": "openSmartLink",
-                        "link": {"iOS": "sberbank://smartlink/youth", "android": "sberbank://smartlink/youth"}
-                    }
-                }, indent=2, ensure_ascii=False), language="json")
-        else:
-            st.info("JSON появится после генерации креатива.")
-
-        st.markdown('<div class="section-title" style="margin-top:12px;">Audit</div>', unsafe_allow_html=True)
-        if not draft["audit"]:
-            st.caption("Пока нет записей.")
-        for a in reversed(draft["audit"][-8:]):
-            ch = a.get("changes")
-            ch_txt = json.dumps(ch, ensure_ascii=False) if ch else "—"
-            cmt = f'<br><i style="color:{TOKENS["text_muted"]};">💬 {a["comment"]}</i>' if a.get("comment") else ""
-            st.markdown(
-                f'<div class="audit-item"><b>{a["at"]}</b> · {a["action"]} · {a["actor"]} '
-                f'<br><span style="font-size:11px;">{ch_txt}</span>{cmt}</div>',
-                unsafe_allow_html=True,
-            )
-
-    # --- TAB 3: CAMPAIGNS ---
-    with tab_campaigns:
-        st.markdown('<div class="section-title">Список кампаний</div>', unsafe_allow_html=True)
-
-        filter_state = st.selectbox(
-            "Фильтр по state",
-            ["Все", "DRAFT", "ON_MODERATION", "NEEDS_WORK", "APPROVED", "ACTIVE", "ACTIVE_EDITING", "STOPPED"],
-            label_visibility="collapsed",
-            key="rail_filter_state",
+        tab_preview, tab_passport, tab_campaigns = st.tabs(
+            ["📱 Превью", "⚙️ ИТ-паспорт", "🗂 Кампании"]
         )
 
-        if st.button("➕ Новая кампания", use_container_width=True, key="btn_new_campaign"):
-            st.session_state.pending_action = {
-                "kind": "create_campaign",
-                "payload": {"name": "Новая кампания", "topic": "NEW"},
-                "method": "POST /campaigns",
-            }
-            st.rerun()
-
-        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-
-        for c in st.session_state.campaigns:
-            if filter_state != "Все" and c["state"] != filter_state:
-                continue
-            is_active = c["id"] == st.session_state.active_campaign_id
-            border = f"2px solid {TOKENS['sber_green_bright']}" if is_active else border_glass
+        # --- TAB 1: PREVIEW ---
+        with tab_preview:
+            banner = draft.get("banner")
             st.markdown(f"""
-            <div class="rail-item" style="border:{border};">
-              <div class="name">{c['name']}</div>
-              {state_chip(c['state'], c['published'])}
+            <div class="sber-phone">
+              <div class="phone-top">СберБанк Онлайн</div>
+              <div class="phone-wallet">
+                <div style="font-size:11px; color:{text_secondary};">Карты и счета</div>
+                <div style="font-size:20px; font-weight:800; color:{text_primary};">129 500 ₽</div>
+              </div>
+              <div style="font-size:12px; font-weight:600; margin-bottom:8px; color:{text_primary};">Рекомендовано вам:</div>
+              <div class="story-frame">
+                <div class="title">{banner['title'] if banner else '—'}</div>
+                <div class="text">{banner['text'] if banner else 'Ожидание креатива...'}</div>
+                <div class="cta">{banner['cta'] if banner else 'CTA'}</div>
+              </div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button(f"Открыть #{c['id']}", key=f"open_{c['id']}", use_container_width=True):
-                st.session_state.active_campaign_id = c["id"]
-                draft["id"] = c["id"]
-                draft["name"] = c["name"]
-                draft["state"] = c["state"]
-                draft["published"] = c["published"]
-                st.rerun()
+
+            st.markdown('<div class="section-title" style="margin-top:14px;">Валидация</div>', unsafe_allow_html=True)
+            if draft["errors"]:
+                for e in draft["errors"]:
+                    st.markdown(f'<div class="val-error">⛔ {e}</div>', unsafe_allow_html=True)
+            if draft["warnings"]:
+                for w in draft["warnings"]:
+                    st.markdown(f'<div class="val-warn">⚠️ {w}</div>', unsafe_allow_html=True)
+            if not draft["errors"] and not draft["warnings"]:
+                st.markdown(
+                    f'<div class="val-warn" style="background:rgba(0,208,70,0.12); border-color:{TOKENS["sber_green"]};">✓ Валидация пройдена</div>',
+                    unsafe_allow_html=True,
+                )
+
+        # --- TAB 2: PASSPORT ---
+        with tab_passport:
+            st.markdown('<div class="surface">', unsafe_allow_html=True)
+            st.write(f"**ID:** {draft['id']} · **state:** {draft['state']} · **published:** {draft['published']}")
+            st.write(f"**topic:** {draft['topic']}")
+            st.write(f"**audienceType:** {draft['audienceType']}")
+            st.write(f"**places:** {draft['places'] or '—'}")
+            st.write(f"**segments.included:** {draft['segments']['included'] or '—'}")
+            st.write(f"**startDate / startTime:** {draft['startDate']} {draft['startTime']}")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            if banner:
+                with st.expander("🛠 JSON креатива (как отправим в Content Broker)"):
+                    st.code(json.dumps({
+                        "name": banner["title"],
+                        "bannerTypeId": 2,
+                        "content": {
+                            "title": banner["title"],
+                            "text": banner["text"],
+                            "actionType": "openSmartLink",
+                            "link": {"iOS": "sberbank://smartlink/youth", "android": "sberbank://smartlink/youth"}
+                        }
+                    }, indent=2, ensure_ascii=False), language="json")
+            else:
+                st.info("JSON появится после генерации креатива.")
+
+            st.markdown('<div class="section-title" style="margin-top:12px;">Audit</div>', unsafe_allow_html=True)
+            if not draft["audit"]:
+                st.caption("Пока нет записей.")
+            for a in reversed(draft["audit"][-8:]):
+                ch = a.get("changes")
+                ch_txt = json.dumps(ch, ensure_ascii=False) if ch else "—"
+                cmt = f'<br><i style="color:{TOKENS["text_muted"]};">💬 {a["comment"]}</i>' if a.get("comment") else ""
+                st.markdown(
+                    f'<div class="audit-item"><b>{a["at"]}</b> · {a["action"]} · {a["actor"]} '
+                    f'<br><span style="font-size:11px;">{ch_txt}</span>{cmt}</div>',
+                    unsafe_allow_html=True,
+                )
+
+        # --- TAB 3: CAMPAIGNS ---
+        with tab_campaigns:
+            st.markdown('<div class="section-title">Список кампаний</div>', unsafe_allow_html=True)
+
+            filter_state = st.selectbox(
+                "Фильтр по state",
+                ["Все", "DRAFT", "ON_MODERATION", "NEEDS_WORK", "APPROVED", "ACTIVE", "ACTIVE_EDITING", "STOPPED"],
+                label_visibility="collapsed",
+                key="rail_filter_state",
+            )
+
+            if st.button("➕ Новая кампания", use_container_width=True, key="btn_new_campaign"):
+                st.session_state.pending_action = {
+                    "kind": "create_campaign",
+                    "payload": {"name": "Новая кампания", "topic": "NEW"},
+                    "method": "POST /campaigns",
+                }
+
+            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+            for c in st.session_state.campaigns:
+                if filter_state != "Все" and c["state"] != filter_state:
+                    continue
+                is_active = c["id"] == st.session_state.active_campaign_id
+                border = f"2px solid {TOKENS['sber_green_bright']}" if is_active else border_glass
+                st.markdown(f"""
+                <div class="rail-item" style="border:{border};">
+                  <div class="name">{c['name']}</div>
+                  {state_chip(c['state'], c['published'])}
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"Открыть #{c['id']}", key=f"open_{c['id']}", use_container_width=True):
+                    st.session_state.active_campaign_id = c["id"]
+                    draft["id"] = c["id"]
+                    draft["name"] = c["name"]
+                    draft["state"] = c["state"]
+                    draft["published"] = c["published"]
 
 # ============================================================
 # LIFECYCLE (§2.3, §3, §6.1) — кнопки публикации / модерации / брокера
@@ -550,7 +551,7 @@ is_moderator = user_role == "campaignModerator"
 can_to_moderation = state in ("DRAFT", "NEEDS_WORK", "ACTIVE_EDITING") and not draft["errors"]
 can_approve       = is_moderator and state == "ON_MODERATION"
 can_decline       = is_moderator and state == "ON_MODERATION"
-can_activate      = state == "APPROVED" and not is_moderator  # activate выполняет менеджер (после approve)
+can_activate      = state == "APPROVED" and not is_moderator
 can_stop          = published is True
 can_delete        = state in ("DRAFT", "NEEDS_WORK") and not published
 
