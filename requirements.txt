@@ -1,0 +1,10 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+langchain-core==0.3.29
+langchain-openai==0.2.14
+langgraph==0.2.62
+python-dotenv==1.0.1
+pydantic==2.10.4
+grandalf==0.8
+streamlit==1.40.0
+requests==2.32.3
