@@ -2,9 +2,6 @@ import streamlit as st
 import json
 from datetime import datetime
 
-# ============================================================
-# §1. DESIGN TOKENS
-# ============================================================
 st.set_page_config(page_title="Sber AI-Campaign | DevGirls", layout="wide", page_icon="💚")
 
 TOKENS = {
@@ -52,9 +49,6 @@ def state_chip(state: str, published: bool = False) -> str:
         f'{meta["label"]}{eye}</span>'
     )
 
-# ============================================================
-# SIDEBAR
-# ============================================================
 with st.sidebar:
     st.markdown("### 🎨 Управление стилем")
     theme_label = "☀️ Светлая экосистема" if st.session_state.get("theme_mode", False) else "🌙 Тёмная экосистема"
@@ -77,7 +71,6 @@ if theme_mode:
     text_secondary = "#4B5563"
     text_muted = "#6B7280"
     border_glass = "1px solid #E5E7EB"
-    # Контрастные кнопки в светлой теме
     btn_bg = "#0B6B24"
     btn_text = "#FFFFFF"
     btn_disabled_bg = "rgba(17,24,39,0.08)"
@@ -90,14 +83,11 @@ else:
     text_secondary = TOKENS["text_secondary"]
     text_muted = TOKENS["text_muted"]
     border_glass = TOKENS["border_glass"]
-    btn_bg = None  # будет градиент
+    btn_bg = None
     btn_text = "#FFFFFF"
     btn_disabled_bg = "rgba(255,255,255,0.08)"
     btn_disabled_text = TOKENS["text_muted"]
 
-# ============================================================
-# CSS
-# ============================================================
 st.markdown(f"""
 <style>
 @keyframes pulse {{ 0%,100%{{opacity:1}} 50%{{opacity:0.35}} }}
@@ -141,7 +131,6 @@ div[data-testid="stExpander"] summary {{ color:{text_primary} !important; }}
 .tg-ai   {{ background:{bg_glass}; margin-right:auto; border-bottom-left-radius:6px; border:{border_glass}; border-left:3px solid {TOKENS['sber_green_bright']}; }}
 .tg-sys  {{ background:rgba(255,255,255,0.03); border:1px dashed {text_muted}; font-family:'JetBrains Mono',monospace; font-size:12px; color:{text_secondary} !important; }}
 
-/* ---- Кнопки: явный цвет текста и фона для обеих тем ---- */
 .stButton>button {{
     background: {SBER_GRADIENT if btn_bg is None else btn_bg};
     background-color: {TOKENS['sber_green_dark'] if btn_bg is None else btn_bg};
@@ -201,7 +190,6 @@ div[data-testid="stExpander"] summary {{ color:{text_primary} !important; }}
 .rail-item {{ padding:10px 12px; border-radius:14px; border:{border_glass}; background:{bg_glass}; margin-bottom:8px; cursor:pointer; }}
 .rail-item .name {{ font-weight:600; font-size:13px; color:{text_primary} !important; margin-bottom:6px; }}
 
-/* ---- Кот: крайний ЛЕВЫЙ нижний угол ---- */
 .floating-cat {{
     position: fixed;
     bottom: 12px;
@@ -222,9 +210,6 @@ div[data-testid="stExpander"] summary {{ color:{text_primary} !important; }}
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# STATE
-# ============================================================
 if "campaigns" not in st.session_state:
     st.session_state.campaigns = [
         {"id": "101", "name": "Кредитка Молодежная", "state": "DRAFT", "published": False},
@@ -303,22 +288,18 @@ def validate(d):
 
 validate(draft)
 
-# ============================================================
-# FLOATING CAT — крайний левый нижний угол
-# ============================================================
 state = draft.get("state", "DRAFT")
-if state in ("NEEDS_WORK", "STOPPED") or st.session_state.agent_needs_clarification:
-    cat_img = "NOT.png"
-else:
-    cat_img = "OK.png"
+cat_img = "NOT.png" if (state in ("NEEDS_WORK", "STOPPED") or st.session_state.agent_needs_clarification) else "OK.png"
 
-st.markdown(f'<div class="floating-cat"><img src="{cat_img}" alt="SberCat"></div>', unsafe_allow_html=True)
+cat_placeholder = st.empty()
+cat_placeholder.markdown(
+    f'<div class="floating-cat"><img src="{cat_img}" alt="SberCat"></div>',
+    unsafe_allow_html=True,
+)
 
-# ============================================================
-# TOPBAR
-# ============================================================
 role_badge = "Moderator" if user_role == "campaignModerator" else "Manager"
-st.markdown(f"""
+st.markdown(
+    f"""
 <div class="topbar">
   <div style="display:flex; align-items:center; gap:12px;">
     <div class="logo-check">✓</div>
@@ -332,14 +313,12 @@ st.markdown(f"""
     <span class="topbar-user">X-Role: <b style="color:{TOKENS['sber_green_bright']};">{role_badge}</b></span>
   </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# ============================================================
-# LAYOUT
-# ============================================================
 col_chat, col_insp = st.columns([2, 1.4])
 
-# ---------- CHAT ----------
 with col_chat:
     st.markdown('<div class="section-title">💬 Агент-Оркестратор</div>', unsafe_allow_html=True)
     st.markdown('<div class="surface">', unsafe_allow_html=True)
@@ -415,15 +394,18 @@ with col_chat:
 
     if st.session_state.pending_action:
         pa = st.session_state.pending_action
-        st.markdown(f"""
-        <div class="confirm-card">
-          <div style="font-weight:700; color:{text_primary};">⚠️ Требуется подтверждение</div>
-          <div style="font-size:13px; color:{text_secondary}; margin-top:6px;">
-            Действие: <b>{pa.get('method', 'POST /campaigns/{id}/' + pa['kind'])}</b><br>
-            Изменения: <code>{pa['payload']}</code>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"""
+<div class="confirm-card">
+  <div style="font-weight:700; color:{text_primary};">⚠️ Требуется подтверждение</div>
+  <div style="font-size:13px; color:{text_secondary}; margin-top:6px;">
+    Действие: <b>{pa.get('method', 'POST /campaigns/{id}/' + pa['kind'])}</b><br>
+    Изменения: <code>{pa['payload']}</code>
+  </div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
         c1, c2 = st.columns([1, 1])
         if c1.button("✓ Подтвердить", key="confirm_action", use_container_width=True):
             kind = pa["kind"]
@@ -467,7 +449,6 @@ with col_chat:
             st.session_state.pending_action = None
             st.rerun()
 
-# ---------- RIGHT: TABS ----------
 with col_insp:
     st.markdown('<div class="section-title">📋 Инспекция и Предпросмотр</div>', unsafe_allow_html=True)
 
@@ -477,21 +458,24 @@ with col_insp:
 
     with tab_preview:
         banner = draft.get("banner")
-        st.markdown(f"""
-        <div class="sber-phone">
-          <div class="phone-top">СберБанк Онлайн</div>
-          <div class="phone-wallet">
-            <div style="font-size:11px; color:{text_secondary};">Карты и счета</div>
-            <div style="font-size:20px; font-weight:800; color:{text_primary};">129 500 ₽</div>
-          </div>
-          <div style="font-size:12px; font-weight:600; margin-bottom:8px; color:{text_primary};">Рекомендовано вам:</div>
-          <div class="story-frame">
-            <div class="title">{banner['title'] if banner else '—'}</div>
-            <div class="text">{banner['text'] if banner else 'Ожидание креатива...'}</div>
-            <div class="cta">{banner['cta'] if banner else 'CTA'}</div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"""
+<div class="sber-phone">
+  <div class="phone-top">СберБанк Онлайн</div>
+  <div class="phone-wallet">
+    <div style="font-size:11px; color:{text_secondary};">Карты и счета</div>
+    <div style="font-size:20px; font-weight:800; color:{text_primary};">129 500 ₽</div>
+  </div>
+  <div style="font-size:12px; font-weight:600; margin-bottom:8px; color:{text_primary};">Рекомендовано вам:</div>
+  <div class="story-frame">
+    <div class="title">{banner['title'] if banner else '—'}</div>
+    <div class="text">{banner['text'] if banner else 'Ожидание креатива...'}</div>
+    <div class="cta">{banner['cta'] if banner else 'CTA'}</div>
+  </div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
 
         st.markdown('<div class="section-title" style="margin-top:14px;">Валидация</div>', unsafe_allow_html=True)
         if draft["errors"]:
@@ -507,14 +491,12 @@ with col_insp:
             )
 
     with tab_passport:
-        st.markdown('<div class="surface">', unsafe_allow_html=True)
         st.write(f"**ID:** {draft['id']} · **state:** {draft['state']} · **published:** {draft['published']}")
         st.write(f"**topic:** {draft['topic']}")
         st.write(f"**audienceType:** {draft['audienceType']}")
         st.write(f"**places:** {draft['places'] or '—'}")
         st.write(f"**segments.included:** {draft['segments']['included'] or '—'}")
         st.write(f"**startDate / startTime:** {draft['startDate']} {draft['startTime']}")
-        st.markdown('</div>', unsafe_allow_html=True)
 
         if banner:
             with st.expander("🛠 JSON креатива (как отправим в Content Broker)"):
@@ -569,12 +551,15 @@ with col_insp:
                 continue
             is_active = c["id"] == st.session_state.active_campaign_id
             border = f"2px solid {TOKENS['sber_green_bright']}" if is_active else border_glass
-            st.markdown(f"""
-            <div class="rail-item" style="border:{border};">
-              <div class="name">{c['name']}</div>
-              {state_chip(c['state'], c['published'])}
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f"""
+<div class="rail-item" style="border:{border};">
+  <div class="name">{c['name']}</div>
+  {state_chip(c['state'], c['published'])}
+</div>
+""",
+                unsafe_allow_html=True,
+            )
             if st.button(f"Открыть #{c['id']}", key=f"open_{c['id']}", use_container_width=True):
                 st.session_state.active_campaign_id = c["id"]
                 draft["id"] = c["id"]
@@ -583,9 +568,6 @@ with col_insp:
                 draft["published"] = c["published"]
                 st.rerun()
 
-# ============================================================
-# LIFECYCLE — Жизненный цикл кампании
-# ============================================================
 st.markdown('<div class="section-title" style="margin-top:16px;">🔄 Жизненный цикл кампании</div>', unsafe_allow_html=True)
 
 state = draft["state"]
@@ -655,7 +637,6 @@ with lc3:
         }
         st.rerun()
 
-# ---------- Decline comment (§2.3: comment обязателен) ----------
 if st.session_state.get("show_decline_comment", False) and can_decline:
     st.markdown(
         f'<div class="confirm-card">'
